@@ -1,8 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
-contract SimpleCrowdfunding {
-    address public owner;
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+
+contract SimpleCrowdfunding is Initializable, OwnableUpgradeable, UUPSUpgradeable {
     uint256 public goal;
     uint256 public deadline;
     uint256 public totalRaised;
@@ -14,8 +17,15 @@ contract SimpleCrowdfunding {
     event GoalReached(uint256 totalAmount);
     event RefundClaimed(address indexed user, uint256 amount);
 
-    constructor(uint256 _goal, uint256 _durationInDays) {
-        owner = msg.sender;
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
+    function initialize(uint256 _goal, uint256 _durationInDays) public initializer {
+        __Ownable_init(msg.sender);
+        __UUPSUpgradeable_init();
+
         goal = _goal;
         deadline = block.timestamp + (_durationInDays * 1 days);
     }
@@ -32,14 +42,13 @@ contract SimpleCrowdfunding {
     }
 
     // Owner withdraws if goal is met
-    function withdrawFunds() external {
-        require(msg.sender == owner, "Only owner can withdraw");
+    function withdrawFunds() external onlyOwner {
         require(totalRaised >= goal, "Goal not reached");
         require(block.timestamp >= deadline, "Deadline not yet passed");
         require(!fundsWithdrawn, "Funds already withdrawn");
 
         fundsWithdrawn = true;
-        (bool success, ) = payable(owner).call{value: totalRaised}("");
+        (bool success, ) = payable(owner()).call{value: totalRaised}("");
         require(success, "Transfer failed");
     }
 
@@ -59,5 +68,5 @@ contract SimpleCrowdfunding {
         emit RefundClaimed(msg.sender, amount);
     }
 
-    
+    function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
 }
